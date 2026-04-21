@@ -2,6 +2,6 @@ streamlit
 pandas
 pymupdf
 plotly
-openai
+google-generativeai
 python-dotenv
 pillow
