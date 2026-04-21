@@ -1,20 +1,40 @@
+import streamlit as st
 import google.generativeai as genai
 import os
 from dotenv import load_dotenv
 
+# Load local .env if exists
 load_dotenv()
 
-# Configure Gemini
-api_key = os.getenv("GEMINI_API_KEY")
-if api_key:
-    genai.configure(api_key=api_key)
+def get_api_key():
+    """
+    Retrieves API key from Streamlit secrets (for Cloud) 
+    or environment variables (for local/AI Studio).
+    """
+    # 1. Try Streamlit Secrets (Highest priority for Streamlit Cloud)
+    if "GEMINI_API_KEY" in st.secrets:
+        return st.secrets["GEMINI_API_KEY"]
+    
+    # 2. Try Environment Variables
+    return os.getenv("GEMINI_API_KEY")
+
+def configure_genai():
+    """Configures the Gemini API library with the current key."""
+    api_key = get_api_key()
+    if api_key:
+        genai.configure(api_key=api_key)
+        return True
+    return False
 
 def get_gemini_response(prompt, model_name="gemini-1.5-flash"):
     """
-    Generic function to get response from Gemini.
+    Generic function to get response from Gemini with robust key check.
     """
-    if not api_key:
-        return "Gemini API Key is not configured. Please check your .env file or Secrets panel."
+    if not configure_genai():
+        return "⚠️ Gemini API Key is not configured correctly. \n\n" \
+               "**How to fix:**\n" \
+               "1. If deploying to **Streamlit Cloud**: Add `GEMINI_API_KEY = \"YOUR_KEY\"` in the 'Secrets' panel.\n" \
+               "2. If in **AI Studio Build**: Add `GEMINI_API_KEY` to the 'Secrets' menu (Gear icon -> Secrets)."
     
     try:
         model = genai.GenerativeModel(model_name)
@@ -38,10 +58,10 @@ def analyze_pdf_content(text):
     6. Yield Forecast (Quantitative expectations)
     7. Key Highlights (Bullet points of main takeaways)
 
-    Use Markdown for formatting.
+    Use Markdown for formatting. Use Korean if possible for the final summary labels.
     
     TEXT:
-    {text[:15000]} # Limit text length for token safety
+    {text[:15000]}
     """
     return get_gemini_response(prompt)
 
@@ -57,11 +77,8 @@ def generate_final_report(item, language, tone, pdf_summary, csv_summary):
     - Tone: {tone}
     
     Information Sources:
-    - PDF Analysis Summary:
-    {pdf_summary}
-    
-    - Quantitative Data Summary (Price, FX, SCFI, Energy trends):
-    {csv_summary}
+    - PDF Analysis Summary: {pdf_summary}
+    - Quantitative Data Summary: {csv_summary}
 
     Structure:
     1. Introduction
