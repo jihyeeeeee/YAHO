@@ -17,31 +17,38 @@ def get_api_key():
 
 def get_gemini_response(prompt, model_name="gemini-1.5-flash"):
     """
-    Generic function to get response from Gemini (Free version compliant).
+    Gemini 호출을 시도하고, 실패하면 None을 반환.
     """
     api_key = get_api_key()
     if not api_key:
-        return "⚠️ Gemini API Key is not configured correctly."
-    
+        return None
+
     genai.configure(api_key=api_key)
-    
-    # Try common model naming conventions to avoid 404
-    models_to_try = [model_name, "gemini-1.5-flash-latest", "gemini-1.5-pro", "gemini-2.0-flash"]
-    
-    last_error = ""
+
+    models_to_try = [
+        model_name,
+        "gemini-1.5-flash-latest",
+        "gemini-1.5-pro",
+        "gemini-2.0-flash",
+    ]
+
     for model_id in models_to_try:
         try:
             model = genai.GenerativeModel(model_id)
             response = model.generate_content(prompt)
             return response.text
         except Exception as e:
-            last_error = str(e)
-            if "404" in last_error or "not found" in last_error.lower():
-                continue
-            return f"Error connecting to Gemini ({model_id}): {last_error}"
-            
-    return f"Failed to connect to any Gemini models. Last error: {last_error}"
+            error_text = str(e).lower()
 
+            # 모델 없음이면 다음 모델 시도
+            if "404" in error_text or "not found" in error_text:
+                continue
+
+            # quota, rate limit, auth 문제 포함 전부 실패 처리
+            return None
+
+    return None
+    
 def analyze_pdf_content(text):
     """
     Analyze JRC MARS Bulletin content for Summary tab.
