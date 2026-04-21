@@ -1,5 +1,5 @@
 import streamlit as st
-from openai import OpenAI
+import google.generativeai as genai
 import os
 from dotenv import load_dotenv
 
@@ -11,57 +11,63 @@ def get_api_key():
     Retrieves API key from Streamlit secrets (for Cloud) 
     or environment variables (for local/AI Studio).
     """
-    # Prefer OpenAI Key
-    if "OPENAI_API_KEY" in st.secrets:
-        return st.secrets["OPENAI_API_KEY"]
-    return os.getenv("OPENAI_API_KEY")
+    if "GEMINI_API_KEY" in st.secrets:
+        return st.secrets["GEMINI_API_KEY"]
+    return os.getenv("GEMINI_API_KEY")
 
-def get_ai_response(prompt, model_name="gpt-4o"):
+def get_gemini_response(prompt, model_name="gemini-1.5-flash"):
     """
-    Generic function to get response from OpenAI GPT with robust key check.
+    Generic function to get response from Gemini (Free version compliant).
     """
     api_key = get_api_key()
     if not api_key:
-        return "⚠️ OpenAI API Key is not configured. \n\n" \
-               "**How to fix:**\n" \
-               "1. Get an API key from [platform.openai.com](https://platform.openai.com/).\n" \
-               "2. Add `OPENAI_API_KEY = \"YOUR_KEY\"` in Streamlit Secrets or environment variables."
+        return "⚠️ Gemini API Key is not configured correctly."
     
-    try:
-        client = OpenAI(api_key=api_key)
-        response = client.chat.completions.create(
-            model=model_name,
-            messages=[
-                {"role": "system", "content": "You are a professional market analyst specializing in EU agriculture."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.7
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        return f"Error connecting to OpenAI API: {str(e)}"
+    genai.configure(api_key=api_key)
+    
+    # Try common model naming conventions to avoid 404
+    models_to_try = [model_name, "gemini-1.5-flash-latest", "gemini-1.5-pro", "gemini-2.0-flash"]
+    
+    last_error = ""
+    for model_id in models_to_try:
+        try:
+            model = genai.GenerativeModel(model_id)
+            response = model.generate_content(prompt)
+            return response.text
+        except Exception as e:
+            last_error = str(e)
+            if "404" in last_error or "not found" in last_error.lower():
+                continue
+            return f"Error connecting to Gemini ({model_id}): {last_error}"
+            
+    return f"Failed to connect to any Gemini models. Last error: {last_error}"
 
 def analyze_pdf_content(text):
     """
-    Analyze JRC MARS Bulletin content and structure it for the Summary tab using GPT.
+    Analyze JRC MARS Bulletin content for Summary tab.
     """
     prompt = f"""
-    Analyze the following JRC MARS Bulletin text and summarize it into professional sections.
-    Use Korean for labels if the user language is set to Korean.
-    Sections: Executive Summary, Weather Overview, Weather Forecast, Potato Section, EU Country Analysis, Yield Forecast.
+    Analyze and summarize the JRC MARS Bulletin:
+    - Executive Summary
+    - Weather Overview
+    - Weather Forecast
+    - Potato Section
+    - EU Country Analysis
+    - Yield Forecast
+    
+    Provide highlights in Korean if possible.
     TEXT:
     {text[:15000]}
     """
-    return get_ai_response(prompt)
+    return get_gemini_response(prompt)
 
 def generate_final_report(item, language, tone, pdf_summary, csv_summary):
     """
-    Generate the final consolidated market report using GPT.
+    Generate final report draft.
     """
     prompt = f"""
     Create a professional market report for: {item}.
     Language: {language}, Tone: {tone}.
     Sources: {pdf_summary} and {csv_summary}.
-    Structure: Introduction, Qualitative Analysis, Quantitative Analysis, Conclusion.
     """
-    return get_ai_response(prompt)
+    return get_gemini_response(prompt)
