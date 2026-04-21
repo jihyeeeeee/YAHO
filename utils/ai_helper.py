@@ -28,20 +28,27 @@ def configure_genai():
 
 def get_gemini_response(prompt, model_name="gemini-1.5-flash"):
     """
-    Generic function to get response from Gemini with robust key check.
+    Generic function to get response from Gemini with robust key check and model fallback.
     """
     if not configure_genai():
-        return "⚠️ Gemini API Key is not configured correctly. \n\n" \
-               "**How to fix:**\n" \
-               "1. If deploying to **Streamlit Cloud**: Add `GEMINI_API_KEY = \"YOUR_KEY\"` in the 'Secrets' panel.\n" \
-               "2. If in **AI Studio Build**: Add `GEMINI_API_KEY` to the 'Secrets' menu (Gear icon -> Secrets)."
+        return "⚠️ Gemini API Key is not configured correctly."
     
-    try:
-        model = genai.GenerativeModel(model_name)
-        response = model.generate_content(prompt)
-        return response.text
-    except Exception as e:
-        return f"Error connecting to Gemini API: {str(e)}"
+    # Try multiple model name variants to resolve 404
+    model_variants = [model_name, "gemini-1.5-flash-latest", "gemini-pro"]
+    
+    last_error = ""
+    for variant in model_variants:
+        try:
+            model = genai.GenerativeModel(variant)
+            response = model.generate_content(prompt)
+            return response.text
+        except Exception as e:
+            last_error = str(e)
+            if "404" in last_error:
+                continue # Try next variant
+            return f"Error connecting to Gemini API ({variant}): {last_error}"
+    
+    return f"Failed to connect after trying all variants. Last error: {last_error}"
 
 def analyze_pdf_content(text):
     """
